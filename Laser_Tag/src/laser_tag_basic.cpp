@@ -9,15 +9,21 @@ const int c_IRLED = 4;
 const int c_LED = 2;
 const int c_BUTTONPIN = 27;
 
-int myShotId = 0xF;
+int myShotId = 0x0;
 bool alive = true;
+
+volatile int interruptCounter = 0;
+int numberOfInterrupts = 0;
 
 IRrecv ir_recv(c_RECVPIN);
 IRsend ir_send(c_IRLED);
 
 decode_results results;
 
-void ICACHE_RAM_ATTR makeShot(); 
+portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+
+void makeShot(); 
+void IRAM_ATTR handleInterrupt();
 
 void setup() {
   ir_send.begin();
@@ -31,8 +37,8 @@ void setup() {
   Serial.print("myShotId = ");
   Serial.print(myShotId);
 
-  pinMode(c_BUTTONPIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(c_BUTTONPIN), makeShot, FALLING);
+  pinMode(c_BUTTONPIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(c_BUTTONPIN), handleInterrupt, RISING);
 
   pinMode(c_LED, OUTPUT);
   digitalWrite(c_LED, LOW);
@@ -51,9 +57,22 @@ void loop() {
     }
     ir_recv.resume();  // Receive the next value
   }
+  if(interruptCounter>0){
+ 
+      portENTER_CRITICAL(&mux);
+      interruptCounter--;
+      portEXIT_CRITICAL(&mux);
+      makeShot();
+  }
 }
 
-void ICACHE_RAM_ATTR makeShot() 
+void IRAM_ATTR handleInterrupt() {
+  portENTER_CRITICAL_ISR(&mux);
+  interruptCounter++;
+  portEXIT_CRITICAL_ISR(&mux);
+}
+
+void makeShot() 
 {
   if (alive)
   {
