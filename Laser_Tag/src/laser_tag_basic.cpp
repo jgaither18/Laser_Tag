@@ -37,8 +37,8 @@ void setup() {
   Serial.print("myShotId = ");
   Serial.print(myShotId);
 
-  pinMode(c_BUTTONPIN, INPUT);
-  attachInterrupt(digitalPinToInterrupt(c_BUTTONPIN), handleInterrupt, RISING);
+  pinMode(c_BUTTONPIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(c_BUTTONPIN), handleInterrupt, FALLING);
 
   pinMode(c_LED, OUTPUT);
   digitalWrite(c_LED, LOW);
