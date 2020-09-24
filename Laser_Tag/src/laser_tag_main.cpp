@@ -1,31 +1,34 @@
 #include <Arduino.h>
+
 #include <IRremoteESP8266.h>
 #include <IRsend.h>
 #include <IRrecv.h>
 #include <IRutils.h>
 
+#define BOUNCE_WITH_PROMPT_DETECTION
+#include <Bounce2.h>
+
 const int c_RECVPIN = 14;
 const int c_IRLED = 4;
 const int c_LED = 2;
-const int c_BUTTONPIN = 27;
+const int c_TRIGGERPIN = 27;
 
-int myShotId = 0x0;
+int myShotId = 0xF;
 bool alive = true;
-
-volatile int interruptCounter = 0;
-int numberOfInterrupts = 0;
 
 IRrecv ir_recv(c_RECVPIN);
 IRsend ir_send(c_IRLED);
 
 decode_results results;
 
-portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+Bounce trigger = Bounce(); // Instantiate a Bounce object
+
+int timeLastHit = 0;
 
 void makeShot(); 
-void IRAM_ATTR handleInterrupt();
 
-void setup() {
+void setup() 
+{
   ir_send.begin();
   
   Serial.begin(115200);
@@ -37,14 +40,24 @@ void setup() {
   Serial.print("myShotId = ");
   Serial.print(myShotId);
 
-  pinMode(c_BUTTONPIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(c_BUTTONPIN), handleInterrupt, FALLING);
+  trigger.attach (c_TRIGGERPIN,INPUT_PULLUP);
+  trigger.interval(25);
 
   pinMode(c_LED, OUTPUT);
   digitalWrite(c_LED, LOW);
 }
 
-void loop() {
+void loop() 
+{
+  if((millis() - timeLastHit) > 1000)
+  {
+    digitalWrite(c_LED, LOW);
+  }
+  trigger.update();
+  if(trigger.fell())
+  {
+      makeShot();
+  }
   if (ir_recv.decode(&results))
   {
     if (results.value != myShotId)
@@ -56,28 +69,9 @@ void loop() {
     alive = false;
     }
     ir_recv.resume();  // Receive the next value
+    timeLastHit = millis();
   }
-  if(interruptCounter>0){
- 
-      portENTER_CRITICAL(&mux);
-      interruptCounter--;
-      portEXIT_CRITICAL(&mux);
-      makeShot();
-  }
-}
-
-void IRAM_ATTR handleInterrupt() {
-  static unsigned long last_interrupt_time = 0;
-  unsigned long interrupt_time = millis();
-  // If interrupts come faster than 50ms, assume it's a bounce and ignore
-  if (interrupt_time - last_interrupt_time > 50)
-  {
-    portENTER_CRITICAL_ISR(&mux);
-    interruptCounter++;
-    portEXIT_CRITICAL_ISR(&mux);
-  }
-  last_interrupt_time = interrupt_time;
-}
+} 
 
 void makeShot() 
 {
